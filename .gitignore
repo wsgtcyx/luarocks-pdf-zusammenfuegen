@@ -1,0 +1,11 @@
+dist/*
+!dist/.gitkeep
+!dist/*.rockspec
+!dist/*.src.rock
+!dist/*.all.rock
+!dist/SHA256SUMS
+/*.rock
+lua_modules/
+.luarocks/
+.DS_Store
+tmp/

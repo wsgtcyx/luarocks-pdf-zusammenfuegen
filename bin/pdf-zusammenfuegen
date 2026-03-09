@@ -1,0 +1,104 @@
+#!/usr/bin/env lua
+
+local function script_dir()
+  local info = debug.getinfo(1, "S")
+  local source = info and info.source or ""
+  if source:sub(1, 1) == "@" then
+    source = source:sub(2)
+  end
+  return source:match("^(.*)/[^/]+$") or "."
+end
+
+local root = script_dir() .. "/.."
+package.path = table.concat({
+  root .. "/src/?.lua",
+  root .. "/src/?/init.lua",
+  root .. "/src/?/?.lua",
+  package.path,
+}, ";")
+
+local merge = require("pdfzus.merge")
+
+local function print_help()
+  io.write([[
+pdf-zusammenfuegen
+
+Verwendung:
+  pdf-zusammenfuegen a.pdf b.pdf --output merged.pdf [--pages datei.pdf=1-3,5] [--force] [--verbose]
+
+Optionen:
+  -o, --output PFAD     Pfad der zusammengeführten PDF
+      --pages REGEL     Seitenregel pro Datei, z. B. angebot.pdf=1-3,5
+      --force           Vorhandene Ausgabedatei überschreiben
+      --verbose         qpdf-Version und ausgeführten Befehl ausgeben
+  -h, --help            Diese Hilfe anzeigen
+
+Beispiele:
+  pdf-zusammenfuegen teil-a.pdf teil-b.pdf --output gesamt.pdf
+  pdf-zusammenfuegen mappe.pdf anhang.pdf --pages mappe.pdf=1-2 --output bewerbung.pdf
+
+Projektseite:
+  https://pdfzus.de/
+]])
+end
+
+local args = { ... }
+local inputs = {}
+local page_ranges = {}
+local output_path
+local force = false
+local verbose = false
+
+local index = 1
+while index <= #args do
+  local current = args[index]
+
+  if current == "-h" or current == "--help" then
+    print_help()
+    os.exit(0)
+  elseif current == "-o" or current == "--output" then
+    index = index + 1
+    output_path = args[index]
+  elseif current == "--pages" then
+    index = index + 1
+    local rule = args[index]
+    if not rule or not rule:find("=", 1, true) then
+      io.stderr:write("Fehler: --pages erwartet das Format datei.pdf=1-3,5\n")
+      os.exit(1)
+    end
+
+    local path, range = rule:match("^(.-)=(.+)$")
+    page_ranges[path] = range
+  elseif current == "--force" then
+    force = true
+  elseif current == "--verbose" then
+    verbose = true
+  elseif current:sub(1, 1) == "-" then
+    io.stderr:write("Fehler: Unbekannte Option " .. current .. "\n")
+    os.exit(1)
+  else
+    inputs[#inputs + 1] = current
+  end
+
+  index = index + 1
+end
+
+if not output_path then
+  io.stderr:write("Fehler: --output ist erforderlich.\n")
+  os.exit(1)
+end
+
+local ok, err = merge.merge_files(inputs, output_path, {
+  force = force,
+  verbose = verbose,
+  page_ranges = page_ranges,
+})
+
+if not ok then
+  io.stderr:write("Fehler: " .. err .. "\n")
+  os.exit(1)
+end
+
+if verbose then
+  io.stderr:write("[pdf-zusammenfuegen] Ausgabe geschrieben nach " .. output_path .. "\n")
+end
